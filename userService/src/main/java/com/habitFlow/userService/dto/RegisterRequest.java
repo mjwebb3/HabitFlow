@@ -8,11 +8,15 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import lombok.NoArgsConstructor;
 
+/**
+ * DTO used to carry user registration data, including validation constraints.
+ */
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
 @Schema(description = "Request for user registration")
 public class RegisterRequest {
+
     @NotBlank
     @Size(min = 3, max = 64)
     @Schema(description = "Username for login", example = "darkwoodik12311")

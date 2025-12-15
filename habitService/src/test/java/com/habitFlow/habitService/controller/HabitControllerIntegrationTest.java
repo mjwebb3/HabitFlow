@@ -1,7 +1,6 @@
 package com.habitFlow.habitService.controller;
 
 import com.habitFlow.habitService.config.JwtUtil;
-import com.habitFlow.habitService.config.NotificationClient;
 import com.habitFlow.habitService.config.UserService;
 import com.habitFlow.habitService.dto.HabitCreateDto;
 import com.habitFlow.habitService.dto.HabitDto;
@@ -14,6 +13,7 @@ import com.habitFlow.habitService.model.enums.HabitStatus;
 import com.habitFlow.habitService.repository.HabitRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.habitFlow.habitService.service.HabitFacade;
+import com.habitFlow.habitService.service.HabitReminderProducer;
 import com.habitFlow.habitService.service.HabitService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -26,21 +26,28 @@ import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
 
 import java.time.LocalDate;
 
 import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.doNothing;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
+/**
+ * Integration tests for {@link HabitController}.
+ * This class tests the HTTP endpoints for creating, retrieving, updating, and deleting habits.
+ * It verifies request validation, authorization (checking user ownership via {@link UserService}),
+ * data persistence, and error handling for external service failures.
+ */
 @SpringBootTest
 @AutoConfigureMockMvc
 @Transactional
 @ActiveProfiles("test")
 class HabitControllerIntegrationTest {
+
     @Autowired
     private MockMvc mockMvc;
 
@@ -60,19 +67,17 @@ class HabitControllerIntegrationTest {
     private ObjectMapper objectMapper;
 
     @MockBean
-    private NotificationClient notificationClient;
-
-    @MockBean
     private RestTemplate restTemplate;
 
     @MockBean
     private UserService userService;
 
+    @MockBean
+    private HabitReminderProducer HRproducer;
+
     private String token1;
     private String token2;
-
     private UserDto testUser1;
-
     private UserDto testUser2;
 
     @BeforeEach
@@ -92,6 +97,10 @@ class HabitControllerIntegrationTest {
 
         Mockito.when(userService.getUserByUsername("testUser1")).thenReturn(testUser1);
         Mockito.when(userService.getUserByUsername("testUser2")).thenReturn(testUser2);
+
+        // Mocking producer to prevent sending actual Kafka messages
+        doNothing().when(HRproducer)
+                .send(any(),any());
     }
 
     // ================= CREATE HABIT (POST /habit/) =================
@@ -118,8 +127,6 @@ class HabitControllerIntegrationTest {
                 .andExpect(jsonPath("$.description").value("Run 3 km every morning"))
                 .andExpect(jsonPath("$.frequency").value("DAILY"));
 
-        Mockito.verify(notificationClient)
-                .dispatchNotification(eq("testUser1"), contains("Morning Run"), eq("Habit Created"));
     }
 
     @Test
@@ -202,30 +209,6 @@ class HabitControllerIntegrationTest {
                 .andExpect(jsonPath("$.error").value("User not found: testUser1"));
     }
 
-    @Test
-    @DisplayName("❌ createHabit — 502 BAD GATEWAY: Notification Service unavailable")
-    void createHabit_NotificationServiceUnavailable() throws Exception {
-        HabitCreateDto dto = new HabitCreateDto();
-        dto.setTitle("Test Habit");
-        dto.setDescription("Description");
-        dto.setFrequency(Frequency.DAILY);
-        dto.setStartDate(LocalDate.now());
-        dto.setEndDate(LocalDate.now().plusDays(5));
-        dto.setStatus(HabitStatus.ACTIVE);
-
-        Mockito.when(userService.getUserByUsername("testUser1")).thenReturn(testUser1);
-
-        Mockito.doThrow(new ExternalServiceException("[NotificationClient] Notification Service unavailable"))
-                .when(notificationClient).dispatchNotification(any(), any(), any());
-
-        mockMvc.perform(post("/habit")
-                        .header("Authorization", "Bearer " + token1)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(dto)))
-                .andExpect(status().isBadGateway())
-                .andExpect(jsonPath("$.error").value("[NotificationClient] Notification" +
-                        " Service unavailable"));
-    }
 
     @Test
     @DisplayName("❌ createHabit — 502 BAD GATEWAY: User Service unavailable")
@@ -550,46 +533,6 @@ class HabitControllerIntegrationTest {
                         .content(objectMapper.writeValueAsString(dto)))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.error").value("Habit not found with id: 9999"));
-    }
-
-    @Test
-    @DisplayName("❌ updateHabit — 502 BAD GATEWAY: Notification Service unavailable")
-    void updateHabit_NotificationServiceUnavailable() throws Exception {
-        HabitCreateDto createDto = new HabitCreateDto();
-        createDto.setTitle("Morning Run");
-        createDto.setDescription("Run 3 km every morning");
-        createDto.setFrequency(Frequency.DAILY);
-        createDto.setStartDate(LocalDate.now());
-        createDto.setEndDate(LocalDate.now().plusDays(7));
-        createDto.setStatus(HabitStatus.ACTIVE);
-
-        Mockito.when(userService.getUserByUsername("testUser1")).thenReturn(testUser1);
-
-        String response = mockMvc.perform(post("/habit")
-                        .header("Authorization", "Bearer " + token1)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(createDto)))
-                .andExpect(status().isOk())
-                .andReturn().getResponse().getContentAsString();
-
-        HabitDto createdHabit = objectMapper.readValue(response, HabitDto.class);
-
-        HabitUpdateDto dto = new HabitUpdateDto();
-        dto.setTitle("Updated Habit");
-        dto.setDescription("Updated description");
-        dto.setFrequency(Frequency.WEEKLY);
-        dto.setStatus(HabitStatus.ACTIVE);
-
-        Mockito.doThrow(new ExternalServiceException("[NotificationClient] Notification Service unavailable"))
-                .when(notificationClient).dispatchNotification(any(), any(), any());
-
-        mockMvc.perform(put("/habit/" + createdHabit.getId())
-                        .header("Authorization", "Bearer " + token1)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(dto)))
-                .andExpect(status().isBadGateway())
-                .andExpect(jsonPath("$.error").value("[NotificationClient] Notification Service" +
-                        " unavailable"));
     }
 
     @Test

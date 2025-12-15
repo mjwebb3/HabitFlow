@@ -6,11 +6,17 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+/**
+ * DTO used by other microservices (via the internal REST API) to trigger a general
+ * notification. The notification service uses the provided 'username' to look up
+ * the user's preferred channel (Email or Telegram) and dispatch the message.
+ */
 @Data
 @Schema(description = "DTO for sending an internal message or notification")
 @AllArgsConstructor
 @NoArgsConstructor
 public class DispatchNotificationRequest {
+
     @NotBlank(message = "username is required")
     @Schema(description = "Target username", example = "john_doe")
     private String username;

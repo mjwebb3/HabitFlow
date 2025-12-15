@@ -8,11 +8,18 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+/**
+ * DTO used for several purposes related to user settings:
+ * 1. Initial creation of settings (via Kafka or REST).
+ * 2. Confirmation of the email channel.
+ * 3. Regeneration of the Telegram token (requires userId, email, and username).
+ */
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
 @Schema(description = "DTO for creating or updating notification settings")
 public class NotificationSettingsRequest {
+
     @Schema(description = "Unique user ID", example = "42")
     @NotNull(message = "User ID is required")
     private Long userId;

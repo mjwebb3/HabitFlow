@@ -1,5 +1,6 @@
 package com.habitFlow.notificationService.controller;
 
+import com.habitFlow.Kafka.NotificationChannel;
 import com.habitFlow.notificationService.config.JwtUtil;
 import com.habitFlow.notificationService.config.MailConfig;
 import com.habitFlow.notificationService.dto.DispatchNotificationRequest;
@@ -9,7 +10,6 @@ import com.habitFlow.notificationService.dto.UpdateChannelRequest;
 import com.habitFlow.notificationService.exception.custom.ForbiddenActionException;
 import com.habitFlow.notificationService.exception.custom.NotificationNotFoundException;
 import com.habitFlow.notificationService.exception.custom.NotificationSendException;
-import com.habitFlow.notificationService.model.NotificationChannel;
 import com.habitFlow.notificationService.repository.NotificationRepository;
 import com.habitFlow.notificationService.service.NotificationFacade;
 import com.habitFlow.notificationService.service.NotificationService;
@@ -31,6 +31,23 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
+/**
+ * **Integration tests for the {@link NotificationController}.**
+ * These tests verify the security and functional correctness of the synchronous,
+ * internal communication endpoints (REST API) intended ONLY for communication
+ * from other trusted microservices (User Service or Habit Service).
+ *
+ * Key verification points include:
+ * 1. **Security Enforcement:** All endpoints strictly require the ROLE_SERVICE authority
+ * (checked via the service token).
+ * 2. **Response Mapping:** Correct mapping of successful operations (200 OK) and various
+ * error conditions (400 Bad Request, 403 Forbidden, 404 Not Found, 502 Bad Gateway)
+ * to HTTP status codes.
+ * 3. **Input Validation:** Validation of request DTOs.
+ * NOTE: The primary business logic for notifications is often triggered
+ * asynchronously via Kafka, while these endpoints serve as the necessary
+ * **synchronous internal API**.
+ */
 @SpringBootTest
 @AutoConfigureMockMvc
 @Transactional
@@ -67,7 +84,7 @@ public class NotificationControllerIntegrationTest {
     void setup() {
         notificationRepository.deleteAll();
         serviceToken = jwtUtil.generateServiceToken("habit-service");
-        String userToken = jwtUtil.generateAccessToken("regular-user");
+        userToken = jwtUtil.generateAccessToken("regular-user");
     }
 
     // ================= /notifications/email =================

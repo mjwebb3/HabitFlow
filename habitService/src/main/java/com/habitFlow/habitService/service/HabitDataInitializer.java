@@ -15,6 +15,9 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Random;
 
+/**
+ * Simple data init for my manual tests
+ */
 @Component
 @RequiredArgsConstructor
 public class HabitDataInitializer implements CommandLineRunner {
@@ -24,84 +27,123 @@ public class HabitDataInitializer implements CommandLineRunner {
 
     @Override
     public void run(String... args) throws Exception {
-        System.out.println("[HabitDataInitializer] — creating random sample habits and trackings...");
+//        System.out.println("[HabitDataInitializer] — creating random sample habits and trackings...");
+//
+//        Random random = new Random();
+//
+//        List<Habit> habits = List.of(
+//                Habit.builder()
+//                        .userId((long) (1 + random.nextInt(10)))
+//                        .title("Morning workout")
+//                        .description("Do 15 minutes of stretching every morning")
+//                        .frequency(Frequency.DAILY)
+//                        .startDate(LocalDate.now().minusDays(3))
+//                        .endDate(LocalDate.now().plusDays(10))
+//                        .status(HabitStatus.ACTIVE)
+//                        .createdAt(LocalDateTime.now())
+//                        .updatedAt(LocalDateTime.now())
+//                        .build(),
+//
+//                Habit.builder()
+//                        .userId((long) (1 + random.nextInt(10)))
+//                        .title("Read a book")
+//                        .description("Read at least 10 pages a day")
+//                        .frequency(Frequency.DAILY)
+//                        .startDate(LocalDate.now().minusDays(5))
+//                        .endDate(LocalDate.now().plusDays(15))
+//                        .status(HabitStatus.ACTIVE)
+//                        .createdAt(LocalDateTime.now())
+//                        .updatedAt(LocalDateTime.now())
+//                        .build(),
+//
+//                Habit.builder()
+//                        .userId((long) (1 + random.nextInt(10)))
+//                        .title("Drink water")
+//                        .description("Drink 2 liters of water daily")
+//                        .frequency(Frequency.DAILY)
+//                        .startDate(LocalDate.now().minusDays(2))
+//                        .endDate(LocalDate.now().plusDays(7))
+//                        .status(HabitStatus.ACTIVE)
+//                        .createdAt(LocalDateTime.now())
+//                        .updatedAt(LocalDateTime.now())
+//                        .build(),
+//                Habit.builder()
+//                        .userId((long) 12640)
+//                        .title("Drink water")
+//                        .description("Drink 2 liters of water daily")
+//                        .frequency(Frequency.DAILY)
+//                        .startDate(LocalDate.now().minusDays(2))
+//                        .endDate(LocalDate.now().plusDays(7))
+//                        .status(HabitStatus.ACTIVE)
+//                        .createdAt(LocalDateTime.now())
+//                        .updatedAt(LocalDateTime.now())
+//                        .build(),
+//                Habit.builder()
+//                        .userId((long) (12641))
+//                        .title("Drink water")
+//                        .description("Drink 2 liters of water daily")
+//                        .frequency(Frequency.DAILY)
+//                        .startDate(LocalDate.now().minusDays(2))
+//                        .endDate(LocalDate.now().plusDays(7))
+//                        .status(HabitStatus.ACTIVE)
+//                        .createdAt(LocalDateTime.now())
+//                        .updatedAt(LocalDateTime.now())
+//                        .build()
+//        );
+//
+//        List<Habit> savedHabits = habitRepository.saveAll(habits);
+//
+//        savedHabits.forEach(habit -> {
+//            for (int i = 0; i < 5; i++) {
+//                habitTrackingRepository.save(
+//                        HabitTracking.builder()
+//                                .habit(habit)
+//                                .trackDate(LocalDate.now().minusDays(i))
+//                                .done(i % 2 == 0)
+//                                .build()
+//                );
+//            }
+//        });
+//
+//        System.out.println("[HabitDataInitializer] ✅ Created " + savedHabits.size() +
+//                " habits with 3 trackings each.");
 
-        Random random = new Random();
-
-        List<Habit> habits = List.of(
-                Habit.builder()
-                        .userId((long) (1 + random.nextInt(10)))
-                        .title("Morning workout")
-                        .description("Do 15 minutes of stretching every morning")
-                        .frequency(Frequency.DAILY)
-                        .startDate(LocalDate.now().minusDays(3))
-                        .endDate(LocalDate.now().plusDays(10))
-                        .status(HabitStatus.ACTIVE)
-                        .createdAt(LocalDateTime.now())
-                        .updatedAt(LocalDateTime.now())
-                        .build(),
-
-                Habit.builder()
-                        .userId((long) (1 + random.nextInt(10)))
-                        .title("Read a book")
-                        .description("Read at least 10 pages a day")
-                        .frequency(Frequency.DAILY)
-                        .startDate(LocalDate.now().minusDays(5))
-                        .endDate(LocalDate.now().plusDays(15))
-                        .status(HabitStatus.ACTIVE)
-                        .createdAt(LocalDateTime.now())
-                        .updatedAt(LocalDateTime.now())
-                        .build(),
-
-                Habit.builder()
-                        .userId((long) (1 + random.nextInt(10)))
-                        .title("Drink water")
-                        .description("Drink 2 liters of water daily")
-                        .frequency(Frequency.DAILY)
-                        .startDate(LocalDate.now().minusDays(2))
-                        .endDate(LocalDate.now().plusDays(7))
-                        .status(HabitStatus.ACTIVE)
-                        .createdAt(LocalDateTime.now())
-                        .updatedAt(LocalDateTime.now())
-                        .build(),
-                Habit.builder()
-                        .userId((long) 12640)
-                        .title("Drink water")
-                        .description("Drink 2 liters of water daily")
-                        .frequency(Frequency.DAILY)
-                        .startDate(LocalDate.now().minusDays(2))
-                        .endDate(LocalDate.now().plusDays(7))
-                        .status(HabitStatus.ACTIVE)
-                        .createdAt(LocalDateTime.now())
-                        .updatedAt(LocalDateTime.now())
-                        .build(),
-                Habit.builder()
-                        .userId((long) (12641))
-                        .title("Drink water")
-                        .description("Drink 2 liters of water daily")
-                        .frequency(Frequency.DAILY)
-                        .startDate(LocalDate.now().minusDays(2))
-                        .endDate(LocalDate.now().plusDays(7))
-                        .status(HabitStatus.ACTIVE)
-                        .createdAt(LocalDateTime.now())
-                        .updatedAt(LocalDateTime.now())
-                        .build()
-        );
-
-        List<Habit> savedHabits = habitRepository.saveAll(habits);
-
-        savedHabits.forEach(habit -> {
-            for (int i = 0; i < 5; i++) {
-                habitTrackingRepository.save(
-                        HabitTracking.builder()
-                                .habit(habit)
-                                .trackDate(LocalDate.now().minusDays(i))
-                                .done(i % 2 == 0)
-                                .build()
-                );
-            }
-        });
-
-        System.out.println("[HabitDataInitializer] ✅ Created " + savedHabits.size() +
-                " habits with 3 trackings each.");}
+        //kafkacheck
+//        habitTrackingRepository.deleteAll();
+//        habitRepository.deleteAll();
+//
+//        System.out.println("[HabitDataInitializer] — creating sample habits & trackings...");
+//
+//        // Для тех же userId, что и в user-service (1–12)
+//        List<Long> userIds = List.of(1L, 2L, 3L, 4L, 5L, 6L, 7L, 8L, 9L, 10L, 11L, 12L);
+//
+//        for (Long userId : userIds) {
+//            Habit habit = Habit.builder()
+//                    .userId(userId)
+//                    .title("Habit for user " + userId)
+//                    .description("Simple habit for testing cleanup")
+//                    .frequency(Frequency.DAILY)
+//                    .startDate(LocalDate.now().minusDays(7))
+//                    .endDate(LocalDate.now().plusDays(14))
+//                    .status(HabitStatus.ACTIVE)
+//                    .createdAt(LocalDateTime.now().minusDays(7))
+//                    .updatedAt(LocalDateTime.now())
+//                    .build();
+//
+//            Habit savedHabit = habitRepository.save(habit);
+//
+//            // Добавляем 5 трекингов
+//            for (int i = 0; i < 5; i++) {
+//                habitTrackingRepository.save(
+//                        HabitTracking.builder()
+//                                .habit(savedHabit)
+//                                .trackDate(LocalDate.now().minusDays(i))
+//                                .done(i % 2 == 0)
+//                                .build()
+//                );
+//            }
+//        }
+//
+//        System.out.println("[HabitDataInitializer] ✅ Created " + userIds.size() + " habits with 5 trackings each.");
+    }
 }

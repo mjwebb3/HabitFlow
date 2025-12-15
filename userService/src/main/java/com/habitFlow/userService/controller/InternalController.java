@@ -14,6 +14,12 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
+/**
+ * REST Controller providing **read-only internal API endpoints for synchronous
+ * communication between microservices. Other services use these endpoints
+ * to fetch user data from the User Service.
+ * All endpoints in this controller require a service token with the ROLE_SERVICE authority.
+ */
 @RestController
 @RequestMapping("/auth/internal")
 @RequiredArgsConstructor
@@ -23,6 +29,13 @@ public class InternalController {
 
     private final InternalFacade internalFacade;
 
+    /**
+     * Retrieves a user's DTO by their username. Requires ROLE_SERVICE.
+     * This is a **data retrieval** operation.
+     *
+     * @param username The username of the user to fetch.
+     * @return ResponseEntity containing the {@link  UserDto}.
+     */
     @Operation(summary = "Get user by username (internal)", description = "Used by other services to" +
             " fetch user info by username")
     @ApiResponses({
@@ -37,6 +50,13 @@ public class InternalController {
         return internalFacade.getUserByUsername(username);
     }
 
+    /**
+     * Checks if a user exists by their ID. Requires ROLE_SERVICE.
+     * This is a validation/existence check operation.
+     *
+     * @param id The ID of the user to check.
+     * @return ResponseEntity with status 200 if the user exists.
+     */
     @Operation(
             summary = "Check if user exists by ID (internal)",
             description = "Used for validation between services, e.g. before habit creation or review publishing."
@@ -52,6 +72,13 @@ public class InternalController {
         return internalFacade.checkUserExists(id);
     }
 
+    /**
+     * Retrieves multiple user DTOs based on a list of IDs via a POST request. Requires ROLE_SERVICE.
+     * This is a **batch data retrieval** operation.
+     *
+     * @param ids A list of Longs representing the user IDs to retrieve.
+     * @return ResponseEntity containing a List of {@link UserDto} objects.
+     */
     @Operation(
             summary = "Get multiple users by IDs (internal)",
             description = "Fetches multiple user records in one request. " +

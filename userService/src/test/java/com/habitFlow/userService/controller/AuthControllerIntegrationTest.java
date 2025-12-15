@@ -1,13 +1,14 @@
-package com.habitFlow.userService.controller;import com.fasterxml.jackson.databind.ObjectMapper;
+package com.habitFlow.userService.controller;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.habitFlow.userService.config.JwtUtil;
-import com.habitFlow.userService.config.NotificationClient;
 import com.habitFlow.userService.dto.LoginRequest;
+import com.habitFlow.userService.dto.TokenRequest;
 import com.habitFlow.userService.dto.RegisterRequest;
-import com.habitFlow.userService.exception.custom.ExternalServiceException;
 import com.habitFlow.userService.model.User;
 import com.habitFlow.userService.repository.UserRepository;
 import com.habitFlow.userService.service.AuthService;
+import com.habitFlow.userService.service.NotificationProducer;
 import com.habitFlow.userService.service.RefreshTokenService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -30,8 +31,13 @@ import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
+/**
+ * Integration tests for {@link AuthController}. Test API endpoints
+ * for authentication (/auth/*), including registration, login, token refresh,
+ * logout, and email verification.
+ */
 @SpringBootTest
-@AutoConfigureMockMvc(addFilters = false)
+@AutoConfigureMockMvc
 @Transactional
 @ActiveProfiles("test")
 class AuthControllerIntegrationTest {
@@ -49,9 +55,6 @@ class AuthControllerIntegrationTest {
     private PasswordEncoder passwordEncoder;
 
     @MockBean
-    private NotificationClient notificationClient;
-
-    @MockBean
     private RestTemplate restTemplate;
 
     @Autowired
@@ -63,14 +66,24 @@ class AuthControllerIntegrationTest {
     @Autowired
     private RefreshTokenService refreshTokenService;
 
+    @MockBean
+    private NotificationProducer notificationProducer;
+
     private final String BASE_URL = "/auth";
 
     @BeforeEach
     void setup() {
         userRepository.deleteAll();
-        doNothing().when(notificationClient).sendVerificationEmail(any(), any(), any());
-        doNothing().when(notificationClient).createInitialNotificationSettings(any());
-        doNothing().when(notificationClient).confirmEmailChannel(any());
+
+        // Kafka mock producers do not perform any actions
+        doNothing().when(notificationProducer)
+                .sendCreateInitialSettings(any());
+
+        doNothing().when(notificationProducer)
+                .sendVerificationEmail(any());
+
+        doNothing().when(notificationProducer)
+                .sendConfirmEmailChannel(any());
     }
 
     // ================= /auth/register =================
@@ -84,8 +97,8 @@ class AuthControllerIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isOk())
-                .andExpect(content().string("User registered! Please check your email for" +
-                        " the verification code."));
+                .andExpect(content().string("Registration successful. A confirmation email has" +
+                        " been queued for delivery."));
     }
 
     @Test
@@ -94,6 +107,7 @@ class AuthControllerIntegrationTest {
         User existing = User.builder()
                 .username("user1")
                 .email("u1@example.com")
+                .lastActiveAt(LocalDateTime.now())
                 .password(passwordEncoder.encode("pass"))
                 .emailVerified(false)
                 .createdAt(LocalDateTime.now())
@@ -123,23 +137,6 @@ class AuthControllerIntegrationTest {
                 .andExpect(jsonPath("$.username").exists());
     }
 
-    @Test
-    @DisplayName("❌ /register - 502 Bad Gateway (Notification Service unavailable)")
-    void register_notificationServiceUnavailable() throws Exception {
-        RegisterRequest req = new RegisterRequest("brokenUser", "password",
-                "broken@example.com");
-
-        doThrow(new ExternalServiceException("[NotificationClient] Notification Service unavailable"))
-                .when(notificationClient).createInitialNotificationSettings(any());
-
-        mockMvc.perform(post(BASE_URL + "/register")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(req)))
-                .andExpect(status().isBadGateway())
-                .andExpect(jsonPath("$.error").value("[NotificationClient] Notification" +
-                        " Service unavailable"));
-    }
-
     // ================= /auth/login =================
 
     @Test
@@ -148,6 +145,7 @@ class AuthControllerIntegrationTest {
         User user = User.builder()
                 .username("loginUser")
                 .email("login@example.com")
+                .lastActiveAt(LocalDateTime.now())
                 .password(passwordEncoder.encode("password1"))
                 .emailVerified(true)
                 .createdAt(LocalDateTime.now())
@@ -170,6 +168,7 @@ class AuthControllerIntegrationTest {
         User user = User.builder()
                 .username("username2")
                 .email("u2@example.com")
+                .lastActiveAt(LocalDateTime.now())
                 .password(passwordEncoder.encode("correct"))
                 .emailVerified(true)
                 .createdAt(LocalDateTime.now())
@@ -190,6 +189,7 @@ class AuthControllerIntegrationTest {
         User user = User.builder()
                 .username("username3")
                 .email("u3@example.com")
+                .lastActiveAt(LocalDateTime.now())
                 .password(passwordEncoder.encode("password1"))
                 .emailVerified(false)
                 .verificationCode("tok123")
@@ -228,36 +228,32 @@ class AuthControllerIntegrationTest {
                 .email("refresh@example.com")
                 .password(passwordEncoder.encode("password1"))
                 .emailVerified(true)
+                .lastActiveAt(LocalDateTime.now())
                 .createdAt(LocalDateTime.now())
                 .build();
         userRepository.save(user);
-        String token = refreshTokenService.createRefreshToken(user).getToken();
+        String tokenValue = refreshTokenService.createRefreshToken(user).getToken();
+
+        TokenRequest request = new TokenRequest(tokenValue);
 
         mockMvc.perform(post(BASE_URL + "/refresh")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(token))
+                        .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.accessToken").exists())
-                .andExpect(jsonPath("$.refreshToken").value(token));
+                .andExpect(jsonPath("$.refreshToken").value(tokenValue));
     }
 
     @Test
     @DisplayName("❌ /refresh - 400  Invalid refresh token")
     void refresh_invalid_refresh_token() throws Exception {
-        User user = User.builder()
-                .username("refreshUser2")
-                .email("refresh2@example.com")
-                .password(passwordEncoder.encode("password2"))
-                .emailVerified(true)
-                .createdAt(LocalDateTime.now())
-                .build();
-        userRepository.save(user);
+        TokenRequest request = new TokenRequest("");
 
         mockMvc.perform(post(BASE_URL + "/refresh")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("wrong-token"))
+                        .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.error").value("Invalid refresh token"));
+                .andExpect(jsonPath("$.refreshToken").value("Refresh token is required"));
     }
 
     // ================= /auth/logout =================
@@ -265,11 +261,71 @@ class AuthControllerIntegrationTest {
     @Test
     @DisplayName("✅ /logout - 200 OK")
     void logout_success() throws Exception {
+        User user = User.builder()
+                .username("logoutUser")
+                .email("logout@example.com")
+                .password(passwordEncoder.encode("pass123"))
+                .emailVerified(true)
+                .lastActiveAt(LocalDateTime.now())
+                .createdAt(LocalDateTime.now())
+                .build();
+        userRepository.save(user);
+
+        String refreshToken = refreshTokenService.createRefreshToken(user).getToken();
+        String accessToken = jwtUtil.generateAccessToken(user.getUsername());
+
         mockMvc.perform(post(BASE_URL + "/logout")
+                        .header("Authorization", "Bearer " + accessToken)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("any-token"))
+                        .content(objectMapper.writeValueAsString(new TokenRequest(refreshToken))))
                 .andExpect(status().isOk())
                 .andExpect(content().string("Logged out successfully"));
+    }
+
+    @Test
+    @DisplayName("❌ /logout - 401 Unauthorized (missing token)")
+    void logout_missingToken() throws Exception {
+        User user = User.builder()
+                .username("logoutUser2")
+                .email("logout2@example.com")
+                .password(passwordEncoder.encode("pass123"))
+                .emailVerified(true)
+                .lastActiveAt(LocalDateTime.now())
+                .createdAt(LocalDateTime.now())
+                .build();
+        userRepository.save(user);
+
+        String refreshToken = refreshTokenService.createRefreshToken(user).getToken();
+
+        mockMvc.perform(post(BASE_URL + "/logout")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new TokenRequest(refreshToken))))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.error").value("Authentication required"));
+    }
+
+    @Test
+    @DisplayName("❌ /logout - 400 Bad Request (Non-existent refresh token)")
+    void logout_missingRefreshToken() throws Exception {
+        User user = User.builder()
+                .username("logoutUser4")
+                .email("logout4@example.com")
+                .password(passwordEncoder.encode("pass123"))
+                .emailVerified(true)
+                .lastActiveAt(LocalDateTime.now())
+                .createdAt(LocalDateTime.now())
+                .build();
+        userRepository.save(user);
+
+        String accessToken = jwtUtil.generateAccessToken(user.getUsername());
+        TokenRequest request = new TokenRequest("non-existent-token-123");
+
+        mockMvc.perform(post(BASE_URL + "/logout")
+                        .header("Authorization", "Bearer " + accessToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("Invalid refresh token"));
     }
 
     // ================= /auth/verify =================
@@ -283,6 +339,7 @@ class AuthControllerIntegrationTest {
                 .password(passwordEncoder.encode("passordveri1"))
                 .emailVerified(false)
                 .verificationCode("tok123")
+                .lastActiveAt(LocalDateTime.now())
                 .createdAt(LocalDateTime.now())
                 .build();
         userRepository.save(user);
@@ -303,6 +360,7 @@ class AuthControllerIntegrationTest {
                 .password(passwordEncoder.encode("password6"))
                 .emailVerified(false)
                 .verificationCode("tok123")
+                .lastActiveAt(LocalDateTime.now())
                 .createdAt(LocalDateTime.now())
                 .build();
         userRepository.save(user);
@@ -323,29 +381,5 @@ class AuthControllerIntegrationTest {
                         .param("token", "any"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.error").value("User not found"));
-    }
-
-    @Test
-    @DisplayName("❌ /verify - 502 Bad Gateway (Notification Service unavailable)")
-    void verify_notificationServiceUnavailable() throws Exception {
-        User user = User.builder()
-                .username("verifyUser3")
-                .email("verify3@example.com")
-                .password(passwordEncoder.encode("password6"))
-                .emailVerified(false)
-                .verificationCode("tok123")
-                .createdAt(LocalDateTime.now())
-                .build();
-        userRepository.save(user);
-
-        doThrow(new ExternalServiceException("[NotificationClient] Notification Service unavailable"))
-                .when(notificationClient).confirmEmailChannel(any());
-
-        mockMvc.perform(get(BASE_URL + "/verify")
-                        .param("email", "verify3@example.com")
-                        .param("token", "tok123"))
-                .andExpect(status().isBadGateway())
-                .andExpect(jsonPath("$.error").value("[NotificationClient] Notification" +
-                        " Service unavailable"));
     }
 }

@@ -12,6 +12,14 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import io.swagger.v3.oas.annotations.tags.Tag;
 
+/**
+ * REST Controller for the Notification Service's **Internal API**.
+ * This controller handles **synchronous requests** only from other **trusted microservices** *
+ * (e.g., User Service for settings, Habit Service for dispatch).
+ * * NOTE: While this API exists, the primary, asynchronous communication and event-driven
+ * interactions with other services (like user cleanup and most configuration updates)
+ * are handled via the **Kafka message broker**, not this REST API.
+ */
 @RestController
 @RequestMapping("/notifications")
 @RequiredArgsConstructor
@@ -24,6 +32,12 @@ public class NotificationController {
 
     private final NotificationFacade notificationFacade;
 
+    /**
+     * Endpoint to send a direct email message (e.g., for system-initiated verification).
+     *
+     * @param request The EmailRequest DTO containing the recipient, subject, and message.
+     * @return ResponseEntity with a success message.
+     */
     @Operation(
             summary = "Send email message",
             description = "Sends an email notification directly to a user",
@@ -45,6 +59,12 @@ public class NotificationController {
         return notificationFacade.sendEmail(request);
     }
 
+    /**
+     * Endpoint to create the default notification settings for a new user account.
+     *
+     * @param request The NotificationSettingsRequest DTO containing initial user data.
+     * @return ResponseEntity with status 200 OK.
+     */
     @Operation(
             summary = "Create initial notification settings",
             description = "Creates default notification settings for a new user",
@@ -63,6 +83,12 @@ public class NotificationController {
         return notificationFacade.createSettings(request);
     }
 
+    /**
+     * Endpoint to change the user's active notification channel (EMAIL, TG, or NONE).
+     *
+     * @param request The UpdateChannelRequest DTO specifying the user ID and new channel.
+     * @return ResponseEntity with status 200 OK.
+     */
     @Operation(
             summary = "Update notification channel",
             description = "Changes user’s active notification channel (EMAIL, TELEGRAM, NONE)",
@@ -82,6 +108,13 @@ public class NotificationController {
         return notificationFacade.updateChannel(request);
     }
 
+    /**
+     * Endpoint to initiate the Telegram linking process by regenerating and sending
+     * a temporary verification token to the user's email.
+     *
+     * @param request The NotificationSettingsRequest DTO with user details.
+     * @return ResponseEntity with a success message.
+     */
     @Operation(
             summary = "Regenerate Telegram token",
             description = "Generates a new Telegram verification token for linking user account",
@@ -103,6 +136,13 @@ public class NotificationController {
         return notificationFacade.regenerateToken(request);
     }
 
+    /**
+     * Primary dispatch endpoint. Receives a message and routes it to the user's
+     * currently active and confirmed channel (Email or Telegram).
+     *
+     * @param request The DispatchNotificationRequest DTO with target user and message content.
+     * @return ResponseEntity with status 200 OK.
+     */
     @Operation(
             summary = "Dispatch internal notification",
             description = "Sends a message to user via their active notification channel",
@@ -126,6 +166,13 @@ public class NotificationController {
         return notificationFacade.dispatchNotification(request);
     }
 
+    /**
+     * Endpoint to confirm the email channel status, typically called by the User Service
+     * after a user successfully clicks a verification link.
+     *
+     * @param request The NotificationSettingsRequest DTO containing the user ID and email.
+     * @return ResponseEntity with status 200 OK.
+     */
     @Operation(
             summary = "Confirm email channel",
             description = "Marks email as verified after user clicks confirmation link",

@@ -1,7 +1,6 @@
 package com.habitFlow.userService.controller;
 
 import com.habitFlow.userService.config.JwtUtil;
-import com.habitFlow.userService.config.NotificationClient;
 import com.habitFlow.userService.model.User;
 import com.habitFlow.userService.repository.UserRepository;
 import com.habitFlow.userService.service.RefreshTokenService;
@@ -27,6 +26,11 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
+/**
+ * Integration tests for {@link InternalController}. Check internal API endpoints
+ * (/auth/internal/*) for data exchange between services requiring the
+ * ROLE_SERVICE role.
+ */
 @SpringBootTest
 @AutoConfigureMockMvc
 @Transactional
@@ -41,9 +45,6 @@ class InternalControllerIntegrationTest {
 
     @Autowired
     private PasswordEncoder passwordEncoder;
-
-    @MockBean
-    private NotificationClient notificationClient;
 
     @MockBean
     private RestTemplate restTemplate;
@@ -75,6 +76,7 @@ class InternalControllerIntegrationTest {
         User user = User.builder()
                 .username("john_doe")
                 .email("john@example.com")
+                .lastActiveAt(LocalDateTime.now())
                 .password(passwordEncoder.encode("12345678dadda"))
                 .emailVerified(true)
                 .createdAt(LocalDateTime.now())
@@ -106,6 +108,7 @@ class InternalControllerIntegrationTest {
                 .username("john_doe")
                 .email("john@example.com")
                 .password(passwordEncoder.encode("12345678fad"))
+                .lastActiveAt(LocalDateTime.now())
                 .emailVerified(true)
                 .createdAt(LocalDateTime.now())
                 .build();
@@ -127,6 +130,7 @@ class InternalControllerIntegrationTest {
                 .username("alice")
                 .email("alice@example.com")
                 .password(passwordEncoder.encode("12345678aka"))
+                .lastActiveAt(LocalDateTime.now())
                 .emailVerified(true)
                 .createdAt(LocalDateTime.now())
                 .build();
@@ -167,6 +171,7 @@ class InternalControllerIntegrationTest {
                 .username("john_doe")
                 .email("john@example.com")
                 .password(passwordEncoder.encode("12345678"))
+                .lastActiveAt(LocalDateTime.now())
                 .emailVerified(true)
                 .createdAt(LocalDateTime.now())
                 .build();
@@ -175,6 +180,7 @@ class InternalControllerIntegrationTest {
                 .username("alice")
                 .email("alice@example.com")
                 .password(passwordEncoder.encode("87654321"))
+                .lastActiveAt(LocalDateTime.now())
                 .emailVerified(true)
                 .createdAt(LocalDateTime.now())
                 .build();
@@ -199,6 +205,7 @@ class InternalControllerIntegrationTest {
                 .username("john_doe")
                 .email("john@example.com")
                 .password(passwordEncoder.encode("12345678"))
+                .lastActiveAt(LocalDateTime.now())
                 .emailVerified(true)
                 .createdAt(LocalDateTime.now())
                 .build();
@@ -207,6 +214,7 @@ class InternalControllerIntegrationTest {
                 .username("alice")
                 .email("alice@example.com")
                 .password(passwordEncoder.encode("87654321"))
+                .lastActiveAt(LocalDateTime.now())
                 .emailVerified(true)
                 .createdAt(LocalDateTime.now())
                 .build();

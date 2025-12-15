@@ -2,14 +2,10 @@ package com.habitFlow.userService.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.habitFlow.userService.config.JwtUtil;
-import com.habitFlow.userService.config.NotificationClient;
 import com.habitFlow.userService.dto.UpdateChannelRequest;
-import com.habitFlow.userService.exception.custom.ChannelNotSelectedException;
-import com.habitFlow.userService.exception.custom.ExternalServiceException;
 import com.habitFlow.userService.model.User;
 import com.habitFlow.userService.repository.UserRepository;
-import com.habitFlow.userService.service.RefreshTokenService;
-import com.habitFlow.userService.service.UserService;
+import com.habitFlow.userService.service.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -21,18 +17,20 @@ import org.springframework.http.MediaType;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.client.RestClientException;
+import com.habitFlow.Kafka.NotificationChannel;
 
-import com.habitFlow.userService.model.NotificationChannel;
 import java.time.LocalDateTime;
 
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.doNothing;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
+/**
+ * Integration tests for {@link UserController}. Check API endpoints
+ * for authenticated users (/user/*), including data retrieval,
+ * notification channel updates, and account deletion.
+ */
 @SpringBootTest
 @AutoConfigureMockMvc
 @Transactional
@@ -57,7 +55,10 @@ class UserControllerIntegrationTest {
     private UserService userService;
 
     @MockBean
-    private NotificationClient notificationClient;
+    private NotificationProducer notificationProducer;
+
+    @MockBean
+    private UserCleanupProducer cleanupProducer;
 
     @Autowired
     private ObjectMapper objectMapper;
@@ -74,6 +75,7 @@ class UserControllerIntegrationTest {
                 .username("john_doe")
                 .email("john@example.com")
                 .password(passwordEncoder.encode("1234password"))
+                .lastActiveAt(LocalDateTime.now())
                 .emailVerified(true)
                 .createdAt(LocalDateTime.now())
                 .build();
@@ -82,8 +84,15 @@ class UserControllerIntegrationTest {
 
         userToken = jwtUtil.generateAccessToken("john_doe");
 
-        doNothing().when(notificationClient).regenerateTelegramToken(any());
-        doNothing().when(notificationClient).updateNotificationChannel(any(), eq(NotificationChannel.TG));
+        // Kafka mock producers do not perform any actions
+        doNothing().when(notificationProducer)
+                .sendCreateInitialSettings(any());
+
+        doNothing().when(notificationProducer)
+                .sendVerificationEmail(any());
+
+        doNothing().when(notificationProducer)
+                .sendConfirmEmailChannel(any());
     }
 
     // ================= /user/me =================
@@ -104,8 +113,7 @@ class UserControllerIntegrationTest {
     void getCurrentUserInfo_unauthorized() throws Exception {
         mockMvc.perform(get("/user/me"))
                 .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.error").value("JWT error: Full authentication is" +
-                        " required to access this resource"));
+                .andExpect(jsonPath("$.error").value("Authentication required"));
     }
 
     @Test
@@ -124,7 +132,7 @@ class UserControllerIntegrationTest {
     @DisplayName("✅ 200 - Successfully update notification channel")
     void updateNotificationChannel_success() throws Exception {
 
-        UpdateChannelRequest request= new UpdateChannelRequest();
+        UpdateChannelRequest request = new UpdateChannelRequest();
         request.setChannel(NotificationChannel.TG);
 
         mockMvc.perform(post("/user/notification-channel")
@@ -132,7 +140,7 @@ class UserControllerIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
-                .andExpect(content().string("Notification channel updated to TG"));
+                .andExpect(content().string("Notification channel update requested"));
     }
 
     @Test
@@ -152,32 +160,14 @@ class UserControllerIntegrationTest {
     @Test
     @DisplayName("❌ 401 - Unauthorized (missing token)")
     void updateNotificationChannel_unauthorized() throws Exception {
-        UpdateChannelRequest request= new UpdateChannelRequest();
+        UpdateChannelRequest request = new UpdateChannelRequest();
         request.setChannel(NotificationChannel.EMAIL);
 
         mockMvc.perform(post("/user/notification-channel")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.error").value("JWT error: Full authentication is" +
-                        " required to access this resource"));
-    }
-
-    @Test
-    @DisplayName("❌ 403 - Telegram channel not selected (update channel)")
-    void updateNotificationChannel_forbidden() throws Exception {
-        doThrow(new ChannelNotSelectedException("Telegram channel is not selected"))
-                .when(notificationClient)
-                .updateNotificationChannel(any(), eq(NotificationChannel.TG));
-        UpdateChannelRequest request= new UpdateChannelRequest();
-        request.setChannel(NotificationChannel.TG);
-
-        mockMvc.perform(post("/user/notification-channel")
-                        .header("Authorization", "Bearer " + userToken)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.error").value("Telegram channel is not selected"));
+                .andExpect(jsonPath("$.error").value("Authentication required"));
     }
 
     @Test
@@ -185,7 +175,7 @@ class UserControllerIntegrationTest {
     void updateNotificationChannel_userNotFound() throws Exception {
         userRepository.deleteAll();
 
-        UpdateChannelRequest request= new UpdateChannelRequest();
+        UpdateChannelRequest request = new UpdateChannelRequest();
         request.setChannel(NotificationChannel.TG);
 
         mockMvc.perform(post("/user/notification-channel")
@@ -194,44 +184,6 @@ class UserControllerIntegrationTest {
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.error").value("User not found"));
-    }
-
-    @Test
-    @DisplayName("❌ 500 - Notification service error (update channel)")
-    void updateNotificationChannel_notificationServiceError() throws Exception {
-        doThrow(new RestClientException("Service unavailable"))
-                .when(notificationClient)
-                .updateNotificationChannel(any(), eq(NotificationChannel.EMAIL));
-
-        UpdateChannelRequest request= new UpdateChannelRequest();
-        request.setChannel(NotificationChannel.EMAIL);
-
-        mockMvc.perform(post("/user/notification-channel")
-                        .header("Authorization", "Bearer " + userToken)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isInternalServerError())
-                .andExpect(jsonPath("$.error")
-                        .value("Unexpected error: Notification service error: Service unavailable"));
-    }
-
-    @Test
-    @DisplayName("❌ 502 - External service unavailable (update channel)")
-    void updateNotificationChannel_externalServiceError() throws Exception {
-        doThrow(new ExternalServiceException("Notification service unreachable"))
-                .when(notificationClient)
-                .updateNotificationChannel(any(), eq(NotificationChannel.EMAIL));
-
-        UpdateChannelRequest request= new UpdateChannelRequest();
-        request.setChannel(NotificationChannel.EMAIL);
-
-        mockMvc.perform(post("/user/notification-channel")
-                        .header("Authorization", "Bearer " + userToken)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isBadGateway())
-                .andExpect(jsonPath("$.error")
-                        .value("Notification service unreachable"));
     }
 
     // ================= /user/regenerate-tg-token =================
@@ -251,33 +203,7 @@ class UserControllerIntegrationTest {
     void regenerateTelegramToken_unauthorized() throws Exception {
         mockMvc.perform(post("/user/regenerate-tg-token"))
                 .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.error").value("JWT error: Full authentication is" +
-                        " required to access this resource"));
-    }
-
-    @Test
-    @DisplayName("❌ 403 - Telegram channel not selected (regenerate token)")
-    void regenerateTelegramToken_forbidden() throws Exception {
-        doThrow(new ChannelNotSelectedException("Telegram channel is not selected"))
-                .when(notificationClient).regenerateTelegramToken(any());
-
-        mockMvc.perform(post("/user/regenerate-tg-token")
-                        .header("Authorization", "Bearer " + userToken))
-                .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.error").value("Telegram channel is not selected"));
-    }
-
-    @Test
-    @DisplayName("❌ 500 - Notification service error")
-    void regenerateTelegramToken_notificationServiceError() throws Exception {
-        doThrow(new RestClientException("Service unavailable"))
-                .when(notificationClient).regenerateTelegramToken(any());
-
-        mockMvc.perform(post("/user/regenerate-tg-token")
-                        .header("Authorization", "Bearer " + userToken))
-                .andExpect(status().isInternalServerError())
-                .andExpect(jsonPath("$.error")
-                        .value("Unexpected error: Notification service error: Service unavailable"));
+                .andExpect(jsonPath("$.error").value("Authentication required"));
     }
 
     @Test
@@ -290,17 +216,37 @@ class UserControllerIntegrationTest {
                 .andExpect(jsonPath("$.error").value("User not found"));
     }
 
-    @Test
-    @DisplayName("❌ 502 - External service unavailable (regenerate token)")
-    void regenerateTelegramToken_externalServiceError() throws Exception {
-        doThrow(new ExternalServiceException("Notification service unreachable"))
-                .when(notificationClient)
-                .regenerateTelegramToken(any());
+    // ================= /user/deleteMyData =================
 
-        mockMvc.perform(post("/user/regenerate-tg-token")
+    @Test
+    @DisplayName("✅ 200 - Successfully delete own account")
+    void deleteMyData_success() throws Exception {
+
+        mockMvc.perform(delete("/user/deleteMyData")
                         .header("Authorization", "Bearer " + userToken))
-                .andExpect(status().isBadGateway())
-                .andExpect(jsonPath("$.error")
-                        .value("Notification service unreachable"));
+                .andExpect(status().isOk())
+                .andExpect(content().string("Your account and all related data were successfully deleted."));
+
+        boolean exists = userRepository.existsById(testUser.getId());
+        assert(!exists);
+    }
+
+    @Test
+    @DisplayName("❌ 401 - Unauthorized (missing token)")
+    void deleteMyData_unauthorized() throws Exception {
+        mockMvc.perform(delete("/user/deleteMyData"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.error").value("Authentication required"));
+    }
+
+    @Test
+    @DisplayName("❌ 404 - User not found (delete my data)")
+    void deleteMyData_userNotFound() throws Exception {
+        userRepository.deleteAll();
+
+        mockMvc.perform(delete("/user/deleteMyData")
+                        .header("Authorization", "Bearer " + userToken))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error").value("User not found"));
     }
 }

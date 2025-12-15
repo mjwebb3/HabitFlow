@@ -7,11 +7,16 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+/**
+ * DTO used for direct requests to send a plain email, primarily for verification
+ * or internal email dispatch initiated by other services.
+ */
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 @Schema(description = "DTO for sending email notifications")
 public class EmailRequest {
+
     @Schema(description = "Recipient email address", example = "user@example.com")
     @NotBlank(message = "Recipient email is required")
     @Email(message = "Invalid email format")

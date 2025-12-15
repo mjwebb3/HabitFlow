@@ -10,6 +10,11 @@ import lombok.NoArgsConstructor;
 
 import java.time.LocalDate;
 
+/**
+ * Data Transfer Object (DTO) used for updating an existing habit.
+ * This DTO supports partial updates (PATCH/PUT) as all fields are optional (nullable).
+ * It includes Swagger annotations for API documentation.
+ */
 @Data
 @Builder
 @Schema(name = "HabitUpdateDto", description = "DTO for updating a habit (partial update)")

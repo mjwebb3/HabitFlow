@@ -7,6 +7,11 @@ import io.swagger.v3.oas.models.security.SecurityScheme;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+/**
+ * Configuration class for OpenAPI (Swagger UI).
+ * It customizes the documentation display, providing service metadata and
+ * defining the security scheme required for authenticated endpoints.
+ */
 @Configuration
 public class OpenApiConfig {
 

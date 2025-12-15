@@ -2,7 +2,6 @@ package com.habitFlow.habitService.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.habitFlow.habitService.config.JwtUtil;
-import com.habitFlow.habitService.config.NotificationClient;
 import com.habitFlow.habitService.config.UserService;
 import com.habitFlow.habitService.dto.HabitTrackingDto;
 import com.habitFlow.habitService.dto.UserDto;
@@ -11,6 +10,7 @@ import com.habitFlow.habitService.model.Habit;
 import com.habitFlow.habitService.repository.HabitRepository;
 import com.habitFlow.habitService.repository.HabitTrackingRepository;
 import com.habitFlow.habitService.service.HabitFacade;
+import com.habitFlow.habitService.service.HabitReminderProducer;
 import com.habitFlow.habitService.service.HabitService;
 import com.habitFlow.habitService.service.HabitTrackingService;
 import org.junit.jupiter.api.BeforeEach;
@@ -30,10 +30,18 @@ import org.springframework.web.client.RestTemplate;
 
 import java.time.LocalDate;
 
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doNothing;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+/**
+ * Integration tests for {@link HabitTrackingController}.
+ * These tests focus on verifying the correct HTTP responses (status codes and body content)
+ * for all API endpoints related to habit tracking, including authorization, validation,
+ * data persistence, and error handling for external service failures.
+ */
 @SpringBootTest
 @AutoConfigureMockMvc
 @Transactional
@@ -65,7 +73,7 @@ public class HabitTrackingControllerIntegrationTest {
     private ObjectMapper objectMapper;
 
     @MockBean
-    private NotificationClient notificationClient;
+    private HabitReminderProducer HRproducer;
 
     @MockBean
     private RestTemplate restTemplate;
@@ -75,9 +83,7 @@ public class HabitTrackingControllerIntegrationTest {
 
     private String token1;
     private String token2;
-
     private UserDto testUser1;
-
     private UserDto testUser2;
 
     @BeforeEach
@@ -92,8 +98,13 @@ public class HabitTrackingControllerIntegrationTest {
 
         token1 = jwtUtil.generateAccessToken("testUser1");
         token2 = jwtUtil.generateAccessToken("testUser2");
+
         Mockito.when(userService.getUserByUsername("testUser1")).thenReturn(testUser1);
         Mockito.when(userService.getUserByUsername("testUser2")).thenReturn(testUser2);
+
+        // Mocking producer to prevent sending actual Kafka messages
+        doNothing().when(HRproducer)
+                .send(any(),any());
 
         habitRepository.deleteAll();
         habitTrackingRepository.deleteAll();
@@ -123,8 +134,6 @@ public class HabitTrackingControllerIntegrationTest {
                 .andExpect(jsonPath("$.done").value(true))
                 .andExpect(jsonPath("$.trackDate").value("2025-10-21"));
 
-        Mockito.verify(notificationClient, Mockito.times(1))
-                .dispatchNotification(Mockito.eq("testUser1"), Mockito.anyString(), Mockito.anyString());
     }
 
     @Test
@@ -148,6 +157,7 @@ public class HabitTrackingControllerIntegrationTest {
     }
 
     @Test
+    @DisplayName("❌ createTracking — 401 Unauthorized")
     void createTracking_Unauthorized_ShouldReturn401() throws Exception {
         HabitTrackingDto dto = HabitTrackingDto.builder()
                 .trackDate(LocalDate.of(2025, 10, 20))
@@ -199,8 +209,8 @@ public class HabitTrackingControllerIntegrationTest {
     }
 
     @Test
-    @DisplayName("❌ createTracking — 502 BAD GATEWAY: external notification service unavailable")
-    void createTracking_ExternalServiceUnavailable() throws Exception {
+    @DisplayName("❌ createTracking — 502 BAD GATEWAY: User Service unavailable")
+    void createTracking_UserServiceUnavailable() throws Exception {
         Habit habit = new Habit();
         habit.setUserId(testUser1.getId());
         habit.setTitle("Run Every Day");
@@ -211,19 +221,15 @@ public class HabitTrackingControllerIntegrationTest {
                 .done(true)
                 .build();
 
-        Mockito.doThrow(new ExternalServiceException("[NotificationClient] Notification Service unavailable"))
-                .when(notificationClient)
-                .dispatchNotification(Mockito.anyString(), Mockito.anyString(), Mockito.anyString());
+        Mockito.when(userService.getUserByUsername("testUser1"))
+                .thenThrow(new ExternalServiceException("User Service unavailable"));
 
         mockMvc.perform(post("/tracking/habit/" + habit.getId())
                         .header("Authorization", "Bearer " + token1)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(dto)))
                 .andExpect(status().isBadGateway())
-                .andExpect(jsonPath("$.error").value("[NotificationClient] Notification Service unavailable"));
-
-        Mockito.verify(notificationClient, Mockito.times(1))
-                .dispatchNotification(Mockito.anyString(), Mockito.anyString(), Mockito.anyString());
+                .andExpect(jsonPath("$.error").value("User Service unavailable"));
     }
 
     // ================= GET ALL TRACKINGS FOR HABIT(GET /tracking/habit/{habitId}) =================
@@ -306,6 +312,19 @@ public class HabitTrackingControllerIntegrationTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.error").value("Invalid value for parameter 'habitId'." +
                         " Expected type: Long"));
+    }
+
+    @Test
+    @DisplayName("❌ getTrackingsByHabit — 502 BAD GATEWAY: User Service unavailable")
+    void getTrackingsByHabit_UserServiceUnavailable() throws Exception {
+        Mockito.when(userService.getUserByUsername("testUser1"))
+                .thenThrow(new ExternalServiceException("User Service unavailable"));
+
+        mockMvc.perform(MockMvcRequestBuilders
+                        .get("/tracking/habit/1")
+                        .header("Authorization", "Bearer " + token1))
+                .andExpect(status().isBadGateway())
+                .andExpect(jsonPath("$.error").value("User Service unavailable"));
     }
 
     // ================= GET TRACKING BY DATE (GET /tracking/habit/{habitId}/date/{date}) =================
@@ -393,6 +412,19 @@ public class HabitTrackingControllerIntegrationTest {
                 .andExpect(jsonPath("$.error").value("Habit not found with id: 9999"));
     }
 
+    @Test
+    @DisplayName("❌ getTrackingByDate — 502 BAD GATEWAY: User Service unavailable")
+    void getTrackingByDate_UserServiceUnavailable() throws Exception {
+        Mockito.when(userService.getUserByUsername("testUser1"))
+                .thenThrow(new ExternalServiceException("User Service unavailable"));
+
+        mockMvc.perform(MockMvcRequestBuilders
+                        .get("/tracking/habit/1/date/2025-10-21")
+                        .header("Authorization", "Bearer " + token1))
+                .andExpect(status().isBadGateway())
+                .andExpect(jsonPath("$.error").value("User Service unavailable"));
+    }
+
     // ================= DELETE TRACKING RECORD(DELTE /tracking/{id}) =================
 
     @Test
@@ -470,5 +502,19 @@ public class HabitTrackingControllerIntegrationTest {
                         .header("Authorization", "Bearer " + token1))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.error").value("HabitTracking not found with id: 9999"));
+    }
+
+
+    @Test
+    @DisplayName("❌ deleteTracking — 502 BAD GATEWAY: User Service unavailable")
+    void deleteTracking_UserServiceUnavailable() throws Exception {
+        Mockito.when(userService.getUserByUsername("testUser1"))
+                .thenThrow(new ExternalServiceException("User Service unavailable"));
+
+        mockMvc.perform(MockMvcRequestBuilders
+                        .delete("/tracking/1")
+                        .header("Authorization", "Bearer " + token1))
+                .andExpect(status().isBadGateway())
+                .andExpect(jsonPath("$.error").value("User Service unavailable"));
     }
 }

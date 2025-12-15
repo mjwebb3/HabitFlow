@@ -13,6 +13,12 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * Client component for **synchronous, internal communication** with the **User Service** (via REST).
+ * This client provides methods for fetching user details required for authorization
+ * and scheduling, using an internal service token for secure access. Errors are mapped
+ * to {@link ExternalServiceException}.
+ */
 @Component
 @RequiredArgsConstructor
 public class UserService {
@@ -20,6 +26,15 @@ public class UserService {
     private final RestTemplate restTemplate;
     private final ServiceTokenProvider tokenProvider;
 
+    /**
+     * Fetches core user details from the User Service using the username.
+     *
+     * @param username The username of the user to fetch.
+     * @return The {@link UserDto} containing necessary user information.
+     * @throws RuntimeException if the service token is invalid.
+     * @throws ResourceNotFoundException if the User Service returns no body (user not found).
+     * @throws ExternalServiceException for any HTTP status error (e.g., 4xx, 5xx) or internal error.
+     */
     public UserDto getUserByUsername(String username) {
         String token = tokenProvider.getServiceToken();
         if (token == null || token.isBlank()) {
@@ -44,6 +59,16 @@ public class UserService {
         }
     }
 
+    // can be used later
+    /**
+     * Checks if a user with the given ID exists in the User Service.
+     * This is useful for validating events consumed from Kafka (e.g., UserCleanupEvent)
+     * or requests from other services.
+     *
+     * @param userId The ID of the user to check.
+     * @return true if the user exists (2xx status), false if 404 is returned.
+     * @throws ExternalServiceException for any other HTTP status error or internal exception.
+     */
     public boolean existsById(Long userId) {
         String token = tokenProvider.getServiceToken();
         if (token == null || token.isBlank()) {
@@ -76,6 +101,15 @@ public class UserService {
         }
     }
 
+    /**
+     * Fetches details for a list of users by their IDs.
+     * This is typically used by schedulers (e.g., in {@code HabitReminderScheduler})
+     * to resolve user details for many habits in a single request.
+     *
+     * @param userIds The list of user IDs to fetch.
+     * @return A map where the key is the user ID and the value is the corresponding {@link UserDto}.
+     * @throws ExternalServiceException for any HTTP status error or internal exception during the call.
+     */
     public Map<Long, UserDto> getUsersByIds(List<Long> userIds) {
         if (userIds.isEmpty()) return Map.of();
 

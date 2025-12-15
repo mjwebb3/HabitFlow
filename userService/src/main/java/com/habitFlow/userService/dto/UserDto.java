@@ -6,6 +6,10 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+/**
+ * A basic DTO used to transfer public user  main info (ID, username, email)
+ * between services or as an API response.
+ */
 @Data
 @NoArgsConstructor
 @AllArgsConstructor

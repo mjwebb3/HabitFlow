@@ -8,12 +8,19 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDate;
+
+/**
+ * Data Transfer Object (DTO) representing a single record of habit completion/tracking
+ * for a specific day.
+ * This DTO is used for creating, retrieving, and validating tracking records.
+ */
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
 @Schema(name = "HabitTrackingDto", description = "Represents a single tracking record for a habit")
 public class HabitTrackingDto {
+
     @Schema(description = "Unique tracking record ID", example = "1")
     private Long id;
 

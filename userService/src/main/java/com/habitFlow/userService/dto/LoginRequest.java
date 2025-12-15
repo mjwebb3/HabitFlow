@@ -7,12 +7,17 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+/**
+ * DTO used to carry user credentials (username and password) for the login process,
+ * including validation constraints.
+ */
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
 @Schema(description = "Request for user login")
 public class LoginRequest {
+
     @NotBlank(message = "Username is required")
     @Schema(description = "User's login name", example = "darkwoodik12311")
     private String username;

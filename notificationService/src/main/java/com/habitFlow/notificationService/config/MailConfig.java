@@ -8,14 +8,25 @@ import org.springframework.mail.javamail.JavaMailSenderImpl;
 
 import java.util.Properties;
 
+/**
+ * Configuration class for setting up and providing the JavaMailSender bean.
+ * This bean is used to send email notifications (e.g., account verification or reminders).
+ * It configures the SMTP host, port, authentication credentials, and required properties for TLS.
+ */
 @Configuration
 public class MailConfig {
+
     @Value("${spring.mail.username}")
     private String username;
 
     @Value("${spring.mail.password}")
     private String password;
 
+    /**
+     * Configures and initializes the {@link JavaMailSender} instance using Gmail's SMTP server.
+     *
+     * @return A fully configured {@link JavaMailSender} implementation.
+     */
     @Bean
     public JavaMailSender javaMailSender() {
         JavaMailSenderImpl mailSender = new JavaMailSenderImpl();

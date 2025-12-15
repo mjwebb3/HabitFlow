@@ -3,15 +3,25 @@ package com.habitFlow.habitService.dto;
 import com.habitFlow.habitService.model.enums.Frequency;
 import com.habitFlow.habitService.model.enums.HabitStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
+import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
 import java.time.LocalDate;
 
+/**
+ * Data Transfer Object (DTO) representing a user's full habit configuration and status.
+ * This DTO is used primarily for transferring complete habit details upon retrieval
+ * or after creation/update.
+ */
 @Data
 @Builder
+@AllArgsConstructor
+@NoArgsConstructor
 @Schema(name = "HabitDto", description = "Represents a user's habit with all its details")
 public class HabitDto {
+
     @Schema(description = "Unique habit ID", example = "1")
     private Long id;
 

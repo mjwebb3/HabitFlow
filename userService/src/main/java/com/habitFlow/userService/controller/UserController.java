@@ -14,6 +14,10 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+/**
+ * REST Controller handling endpoints related to the currently logged-in user's
+ * profile management and notification settings. All endpoints require authentication.
+ */
 @RestController
 @RequestMapping("/user")
 @RequiredArgsConstructor
@@ -23,6 +27,11 @@ public class UserController {
 
     private  final UserFacade userFacade;
 
+    /**
+     * Handles the request to retrieve the profile information for the authenticated user.
+     *
+     * @return ResponseEntity containing the {@link UserDto}.
+     */
     @Operation(summary = "Get current user info", description = "Returns the logged-in user's" +
             " profile info")
     @ApiResponses({
@@ -35,6 +44,13 @@ public class UserController {
         return userFacade.getCurrentUserInfo();
     }
 
+    /**
+     * Handles the request to update the user's preferred notification channel.
+     * The request is processed by the facade and results in a Kafka event being sent.
+     *
+     * @param req The request body containing the new NotificationChannel value.
+     * @return ResponseEntity with a success message.
+     */
     @Operation(
             summary = "Update current user's notification channel",
             description = "Updates the preferred notification channel for the logged-in user. " +
@@ -44,10 +60,8 @@ public class UserController {
             @ApiResponse(responseCode = "200", description = "Notification channel updated successfully"),
             @ApiResponse(responseCode = "400", description = "Invalid or missing channel value"),
             @ApiResponse(responseCode = "401", description = "Unauthorized — token missing or invalid"),
-            @ApiResponse(responseCode = "403", description = "Telegram channel is not selected"),
             @ApiResponse(responseCode = "404", description = "User not found"),
-            @ApiResponse(responseCode = "500", description = "Internal server error while updating channel"),
-            @ApiResponse(responseCode = "502", description = "Notification service unavailable")
+            @ApiResponse(responseCode = "500", description = "Internal server error while updating channel")
     })
     @PostMapping("/notification-channel")
     public ResponseEntity<String> updateNotificationChannel(
@@ -57,18 +71,40 @@ public class UserController {
         return userFacade.updateNotificationChannel(req);
     }
 
+    /**
+     * Triggers the regeneration of a unique Telegram token and queues an email
+     * to the user with the new token.
+     *
+     * @return ResponseEntity with a success message.
+     */
     @Operation(summary = "Regenerate Telegram token", description = "Generates a new Telegram token" +
             " and sends it to user's email")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Telegram token regenerated successfully"),
             @ApiResponse(responseCode = "401", description = "Unauthorized — token missing or invalid"),
-            @ApiResponse(responseCode = "403", description = "Telegram channel is not selected"),
             @ApiResponse(responseCode = "404", description = "User not found"),
-            @ApiResponse(responseCode = "500", description = "Internal server error while regenerating token"),
-            @ApiResponse(responseCode = "502", description = "Notification service unavailable")
+            @ApiResponse(responseCode = "500", description = "Internal server error while regenerating token")
     })
     @PostMapping("/regenerate-tg-token")
     public ResponseEntity<String> regenerateTelegramToken() {
         return userFacade.regenerateTelegramToken();
+    }
+
+    /**
+     * Permanently deletes the account of the currently authenticated user and
+     * notifies other microservices to clean up related data.
+     *
+     * @return ResponseEntity with a success message.
+     */
+    @Operation(
+            summary = "Delete your account",
+            description = "Deletes your user account and triggers cleanup in other microservices."
+    )
+    @ApiResponse(responseCode = "200", description = "Account deleted successfully")
+    @ApiResponse(responseCode = "401", description = "Unauthorized")
+    @ApiResponse(responseCode = "404", description = "User not found")
+    @DeleteMapping("/deleteMyData")
+    public ResponseEntity<String> deleteMyData() {
+        return userFacade.deleteMyData();
     }
 }

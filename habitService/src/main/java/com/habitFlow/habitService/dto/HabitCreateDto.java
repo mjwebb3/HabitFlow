@@ -13,6 +13,11 @@ import lombok.NoArgsConstructor;
 
 import java.time.LocalDate;
 
+/**
+ * Data Transfer Object (DTO) used specifically for creating a new habit.
+ * This DTO includes necessary validation constraints to ensure
+ * required fields are present and meet size limitations before persistence.
+ */
 @Data
 @Builder
 @Schema(name = "HabitCreateDto", description = "DTO for creating a new habit")

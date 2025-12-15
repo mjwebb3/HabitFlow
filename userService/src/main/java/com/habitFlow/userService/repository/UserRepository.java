@@ -7,8 +7,12 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
+/**
+ * Repository interface for accessing and managing {@link User} entity data.
+ */
 public interface UserRepository extends JpaRepository<User,Long> {
     Optional<User> findByUsername(String username);
     Optional<User> findByEmail(String email);
     List<User> findAllByEmailVerifiedFalseAndCreatedAtBefore(LocalDateTime dateTime);
+    List<User> findAllByLastActiveAtBefore(LocalDateTime cutoff);
 }
