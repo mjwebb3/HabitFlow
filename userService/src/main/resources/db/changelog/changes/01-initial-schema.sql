@@ -1,0 +1,22 @@
+-- liquibase formatted sql
+-- changeset danvo:1
+
+CREATE TABLE user (
+id BIGINT AUTO_INCREMENT PRIMARY KEY,
+username VARCHAR(64) NOT NULL UNIQUE,
+password VARCHAR(255) NOT NULL,
+email VARCHAR(320) NOT NULL UNIQUE,
+email_verified BOOLEAN NOT NULL DEFAULT FALSE,
+verification_code VARCHAR(255),
+created_at DATETIME NOT NULL,
+last_active_at DATETIME NOT NULL
+);
+
+CREATE TABLE refresh_token (
+id BIGINT AUTO_INCREMENT PRIMARY KEY,
+token VARCHAR(255) NOT NULL UNIQUE,
+expiry_date DATETIME NOT NULL,
+revoked BOOLEAN NOT NULL DEFAULT FALSE,
+user_id BIGINT NOT NULL,
+CONSTRAINT fk_refresh_token_user FOREIGN KEY (user_id) REFERENCES user(id) ON DELETE CASCADE
+);
