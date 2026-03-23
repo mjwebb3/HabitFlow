@@ -6,12 +6,17 @@ services:
     container_name: mysql_db
     restart: always
     environment:
-      MYSQL_DATABASE: mydb
+      MYSQL_DATABASE: habitflow_db
       MYSQL_ROOT_PASSWORD: JJi2dlwK23D23DgksqA
     ports:
       - "3306:3306"
     volumes:
       - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: [ "CMD", "mysqladmin", "ping", "-h", "localhost" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   # --- KAFKA STACK ---
   zookeeper:
